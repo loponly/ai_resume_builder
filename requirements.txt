@@ -1,0 +1,24 @@
+# Core dependencies for AI Video Generator project
+python-dotenv>=1.0.0
+qdrant-client>=1.7.0
+google-adk
+
+# File processing dependencies
+zipfile-deflate64>=0.2.0
+
+# Optional: Add these if you plan to use more advanced embedding models
+# openai>=1.0.0
+# sentence-transformers>=2.2.0
+# torch>=2.0.0
+# transformers>=4.30.0
+
+# Development dependencies (uncomment if needed)
+# jupyter>=1.0.0
+# ipykernel>=6.0.0
+# notebook>=6.0.0
+
+# Testing dependencies
+pytest>=7.0.0
+pytest-mock>=3.10.0
+pytest-cov>=4.0.0
+pytest-asyncio>=1.0.0
