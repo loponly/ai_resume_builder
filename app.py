@@ -359,7 +359,7 @@ class AIResumeBuilder:
     
     def save_results(self, results: Dict[str, Any], output_dir: str = "output") -> Dict[str, str]:
         """
-        Save the results to markdown files.
+        Save the results to markdown files and database.
         
         Args:
             results: The processing results
@@ -432,6 +432,14 @@ class AIResumeBuilder:
                 
                 file_paths["complete_package"] = str(combined_file)
             
+            # Store in database
+            db_result = self._store_in_database(results, timestamp)
+            if db_result.get("success"):
+                file_paths["database_storage"] = f"Session ID: {db_result.get('session_id')}"
+                print(f"💾 Data stored in database with session ID: {db_result.get('session_id')}")
+            else:
+                print(f"⚠️  Database storage failed: {db_result.get('error', 'Unknown error')}")
+            
             print(f"💾 Results saved to: {output_dir}")
             for doc_type, path in file_paths.items():
                 print(f"   📄 {doc_type}: {path}")
@@ -440,7 +448,123 @@ class AIResumeBuilder:
             print(f"❌ Error saving results: {e}")
         
         return file_paths
-
+    
+    def _store_in_database(self, results: Dict[str, Any], timestamp: str) -> Dict[str, Any]:
+        """
+        Store results in SQLite database.
+        
+        Args:
+            results: The processing results
+            timestamp: Timestamp for session ID
+            
+        Returns:
+            Dictionary with storage results
+        """
+        try:
+            # Initialize database manager
+            db_manager = DatabaseManager()
+            db_manager._setup_resources()
+            
+            import sqlite3
+            import hashlib
+            
+            user_id = results.get("user_id", "user")
+            user_name = results.get("user_name", "User")
+            session_id = f"session_{timestamp}_{user_id}"
+            
+            # Get original content from results (if available)
+            cv_content = results.get("original_cv_content", "")
+            job_content = results.get("original_job_content", "")
+            
+            with sqlite3.connect(db_manager._db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Store user if not exists
+                cursor.execute("""
+                    INSERT OR IGNORE INTO users (user_id, name) 
+                    VALUES (?, ?)
+                """, (user_id, user_name))
+                
+                # Store CV if available
+                cv_id = None
+                if cv_content:
+                    cv_hash = hashlib.md5(cv_content.encode()).hexdigest()
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO original_cvs 
+                        (user_id, cv_content, cv_hash, file_name) 
+                        VALUES (?, ?, ?, ?)
+                    """, (user_id, cv_content, cv_hash, "sample_cv.txt"))
+                    
+                    cursor.execute("SELECT id FROM original_cvs WHERE cv_hash = ?", (cv_hash,))
+                    result = cursor.fetchone()
+                    if result:
+                        cv_id = result[0]
+                
+                # Store job description if available
+                job_id = None
+                if job_content:
+                    job_hash = hashlib.md5(job_content.encode()).hexdigest()
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO job_descriptions 
+                        (job_title, company_name, job_content, job_hash) 
+                        VALUES (?, ?, ?, ?)
+                    """, ("Sample Job", "Sample Company", job_content, job_hash))
+                    
+                    cursor.execute("SELECT id FROM job_descriptions WHERE job_hash = ?", (job_hash,))
+                    result = cursor.fetchone()
+                    if result:
+                        job_id = result[0]
+                
+                # Create processing session
+                if cv_id and job_id:
+                    cursor.execute("""
+                        INSERT INTO processing_sessions 
+                        (session_id, user_id, cv_id, job_id, status, completed_at) 
+                        VALUES (?, ?, ?, ?, 'completed', CURRENT_TIMESTAMP)
+                    """, (session_id, user_id, cv_id, job_id))
+                else:
+                    # Create minimal session without CV/Job references
+                    cursor.execute("""
+                        INSERT INTO processing_sessions 
+                        (session_id, user_id, cv_id, job_id, status, completed_at) 
+                        VALUES (?, ?, 1, 1, 'completed', CURRENT_TIMESTAMP)
+                    """, (session_id, user_id))
+                
+                # Store documents
+                documents = results.get("documents", {})
+                stored_docs = []
+                
+                if "tailored_resume" in documents:
+                    cursor.execute("""
+                        INSERT INTO tailored_resumes 
+                        (session_id, resume_content, quality_score) 
+                        VALUES (?, ?, ?)
+                    """, (session_id, documents["tailored_resume"], 0.8))
+                    stored_docs.append("tailored_resume")
+                
+                if "cover_letter" in documents:
+                    cursor.execute("""
+                        INSERT INTO cover_letters 
+                        (session_id, letter_content, quality_score) 
+                        VALUES (?, ?, ?)
+                    """, (session_id, documents["cover_letter"], 0.8))
+                    stored_docs.append("cover_letter")
+                
+                conn.commit()
+                
+                return {
+                    "success": True,
+                    "session_id": session_id,
+                    "stored_documents": stored_docs,
+                    "database_path": str(db_manager._db_path)
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+        
 
 async def main():
     """Main function to run the AI Resume Builder."""
@@ -487,6 +611,11 @@ async def main():
         user_id="demo_user",
         user_name="Demo User"
     )
+    
+    # Add original content to results for database storage
+    if results.get("success"):
+        results["original_cv_content"] = cv_content
+        results["original_job_content"] = job_description
     
     # Save results
     if results.get("success"):

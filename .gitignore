@@ -204,3 +204,8 @@ output/
 idea/
 content/
 prompts/
+
+# Database files
+#  SQLite database files are often used for local development and testing.
+*.db
+*.sqlite3
