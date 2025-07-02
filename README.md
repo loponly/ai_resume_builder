@@ -16,6 +16,286 @@ An intelligent, multi-agent system that creates personalized, professional resum
 - **Document History**: Track all versions and improvements over time
 - **Performance Analytics**: Monitor success rates and user satisfaction metrics
 
+## 📁 Project Structure
+
+```
+ai_resume_builder/
+├── app.py                          # Main application entry point
+├── README.md                       # Project documentation
+├── requirements.txt                # Python dependencies
+├── setup.py                        # Package setup configuration
+├── .env.example                    # Environment variables template
+├── .gitignore                      # Git ignore rules
+├── pyproject.toml                  # Project configuration (black, ruff, mypy)
+│
+├── agents/                         # AI Agents directory
+│   ├── __init__.py
+│   ├── base/                       # Base agent classes
+│   │   ├── __init__.py
+│   │   ├── base_agent.py          # Abstract base agent
+│   │   └── llm_agent.py           # Base LLM agent implementation
+│   │
+│   ├── core/                       # Core business logic agents
+│   │   ├── __init__.py
+│   │   ├── coordinator.py          # ResumeBuilderCoordinator
+│   │   ├── cv_analyzer.py          # CVAnalyzer agent
+│   │   ├── job_parser.py           # JobDescriptionParser agent
+│   │   ├── resume_tailor.py        # ResumeTailor agent
+│   │   ├── cover_letter_gen.py     # CoverLetterGenerator agent
+│   │   └── quality_reviewer.py     # QualityReviewer agent
+│   │
+│   ├── data/                       # Data management agents
+│   │   ├── __init__.py
+│   │   ├── database_manager.py     # DatabaseManager agent
+│   │   └── file_handler.py         # File operations agent
+│   │
+│   ├── analytics/                  # Analytics and learning agents
+│   │   ├── __init__.py
+│   │   ├── feedback_analyzer.py    # FeedbackAnalyzer agent
+│   │   ├── performance_tracker.py  # Performance tracking agent
+│   │   └── learning_engine.py      # Continuous learning agent
+│   │
+│   └── workflows/                  # Workflow orchestration agents
+│       ├── __init__.py
+│       ├── parallel_agent.py       # Parallel execution workflows
+│       ├── sequential_agent.py     # Sequential execution workflows
+│       └── loop_agent.py           # Iterative refinement workflows
+│
+├── tools/                          # Utility tools and helpers
+│   ├── __init__.py
+│   ├── text_processing/            # Text processing utilities
+│   │   ├── __init__.py
+│   │   ├── keyword_extractor.py    # Keyword extraction tools
+│   │   ├── text_similarity.py      # Text similarity algorithms
+│   │   ├── ats_optimizer.py        # ATS optimization tools
+│   │   └── content_formatter.py    # Content formatting utilities
+│   │
+│   ├── document_generation/        # Document generation tools
+│   │   ├── __init__.py
+│   │   ├── resume_formatter.py     # Resume formatting engine
+│   │   ├── pdf_generator.py        # PDF generation tools
+│   │   ├── docx_generator.py       # Word document generation
+│   │   └── template_engine.py      # Template processing engine
+│   │
+│   ├── analytics/                  # Analytics and metrics tools
+│   │   ├── __init__.py
+│   │   ├── feedback_processor.py   # Feedback processing utilities
+│   │   ├── metrics_calculator.py   # Performance metrics calculation
+│   │   ├── trend_analyzer.py       # Trend analysis tools
+│   │   └── report_generator.py     # Analytics report generation
+│   │
+│   ├── data_validation/            # Data validation and cleaning
+│   │   ├── __init__.py
+│   │   ├── cv_validator.py         # CV content validation
+│   │   ├── job_validator.py        # Job description validation
+│   │   ├── schema_validator.py     # Data schema validation
+│   │   └── content_sanitizer.py    # Content cleaning and sanitization
+│   │
+│   └── integrations/               # External service integrations
+│       ├── __init__.py
+│       ├── ai_models.py            # AI model integrations
+│       ├── storage_connectors.py   # Database connectors
+│       ├── api_clients.py          # External API clients
+│       └── notification_service.py # Notification services
+│
+├── config/                         # Configuration files
+│   ├── __init__.py
+│   ├── agents.yaml                 # Agent configuration
+│   ├── pipeline.yaml               # Pipeline configuration
+│   ├── learning.yaml               # Learning system configuration
+│   ├── database.yaml               # Database configuration
+│   └── logging.yaml                # Logging configuration
+│
+├── data/                           # Data storage directory
+│   ├── database/                   # SQLite database files
+│   │   ├── resume_builder.db       # Main application database
+│   │   └── backups/                # Database backup files
+│   │
+│   ├── templates/                  # Document templates
+│   │   ├── resume_templates/       # Resume formatting templates
+│   │   │   ├── modern.html
+│   │   │   ├── classic.html
+│   │   │   └── ats_friendly.html
+│   │   │
+│   │   └── cover_letter_templates/ # Cover letter templates
+│   │       ├── professional.html
+│   │       ├── creative.html
+│   │       └── technical.html
+│   │
+│   ├── samples/                    # Sample input files
+│   │   ├── sample_cv.txt
+│   │   ├── sample_job_description.txt
+│   │   └── sample_outputs/
+│   │
+│   └── exports/                    # Generated document exports
+│       ├── resumes/                # Generated resume files
+│       ├── cover_letters/          # Generated cover letter files
+│       └── analytics_reports/      # Analytics and performance reports
+│
+├── input/                          # User input files directory
+│   ├── cvs/                        # User CV uploads
+│   ├── job_descriptions/           # Job description files
+│   └── user_profiles/              # User profile data
+│
+├── docs/                           # Documentation
+│   ├── api/                        # API documentation
+│   │   ├── agents_api.md           # Agent API reference
+│   │   ├── tools_api.md            # Tools API reference
+│   │   └── workflows_api.md        # Workflow API reference
+│   │
+│   ├── guides/                     # User and developer guides
+│   │   ├── user_guide.md           # End-user guide
+│   │   ├── developer_guide.md      # Developer setup guide
+│   │   ├── deployment_guide.md     # Deployment instructions
+│   │   └── troubleshooting.md      # Common issues and solutions
+│   │
+│   ├── architecture/               # Architecture documentation
+│   │   ├── system_design.md        # Overall system design
+│   │   ├── agent_interactions.md   # Agent communication patterns
+│   │   ├── data_flow.md            # Data flow diagrams
+│   │   └── database_schema.md      # Database design documentation
+│   │
+│   └── adk/                        # Agent Development Kit documentation
+│       ├── agent_development_patterns.md
+│       ├── api.md
+│       ├── artifacts.md
+│       ├── context.md
+│       ├── evaluate.md
+│       └── tools.md
+│
+├── tests/                          # Test suite
+│   ├── __init__.py
+│   ├── conftest.py                 # Pytest configuration and fixtures
+│   │
+│   ├── unit/                       # Unit tests
+│   │   ├── __init__.py
+│   │   ├── test_agents/            # Agent unit tests
+│   │   │   ├── test_coordinator.py
+│   │   │   ├── test_cv_analyzer.py
+│   │   │   ├── test_resume_tailor.py
+│   │   │   └── test_feedback_analyzer.py
+│   │   │
+│   │   ├── test_tools/             # Tool unit tests
+│   │   │   ├── test_keyword_extractor.py
+│   │   │   ├── test_pdf_generator.py
+│   │   │   └── test_metrics_calculator.py
+│   │   │
+│   │   └── test_utils/             # Utility function tests
+│   │       ├── test_validators.py
+│   │       └── test_formatters.py
+│   │
+│   ├── integration/                # Integration tests
+│   │   ├── __init__.py
+│   │   ├── test_workflows/         # Workflow integration tests
+│   │   │   ├── test_resume_pipeline.py
+│   │   │   └── test_feedback_loop.py
+│   │   │
+│   │   ├── test_database/          # Database integration tests
+│   │   │   └── test_data_persistence.py
+│   │   │
+│   │   └── test_api/               # API integration tests
+│   │       └── test_endpoints.py
+│   │
+│   ├── e2e/                        # End-to-end tests
+│   │   ├── __init__.py
+│   │   ├── test_complete_workflow.py
+│   │   └── test_feedback_learning.py
+│   │
+│   ├── fixtures/                   # Test data fixtures
+│   │   ├── sample_cvs/
+│   │   ├── sample_job_descriptions/
+│   │   └── expected_outputs/
+│   │
+│   └── performance/                # Performance tests
+│       ├── __init__.py
+│       ├── test_agent_performance.py
+│       └── test_system_load.py
+│
+├── scripts/                        # Utility scripts
+│   ├── setup_database.py          # Database initialization
+│   ├── migrate_data.py             # Data migration scripts
+│   ├── backup_system.py            # Backup and restore utilities
+│   ├── performance_benchmark.py    # Performance benchmarking
+│   └── deploy.py                   # Deployment automation
+│
+├── api/                            # API layer (if web interface needed)
+│   ├── __init__.py
+│   ├── main.py                     # FastAPI/Flask main application
+│   ├── routes/                     # API route definitions
+│   │   ├── __init__.py
+│   │   ├── resume_routes.py        # Resume generation endpoints
+│   │   ├── feedback_routes.py      # Feedback collection endpoints
+│   │   └── analytics_routes.py     # Analytics endpoints
+│   │
+│   ├── middleware/                 # API middleware
+│   │   ├── __init__.py
+│   │   ├── auth_middleware.py      # Authentication middleware
+│   │   └── logging_middleware.py   # Request logging
+│   │
+│   └── schemas/                    # API request/response schemas
+│       ├── __init__.py
+│       ├── resume_schemas.py       # Resume-related schemas
+│       └── feedback_schemas.py     # Feedback schemas
+│
+├── ui/                             # User interface (optional web UI)
+│   ├── static/                     # Static assets (CSS, JS, images)
+│   ├── templates/                  # HTML templates
+│   └── components/                 # Reusable UI components
+│
+├── logs/                           # Application logs
+│   ├── app.log                     # Main application log
+│   ├── agents/                     # Agent-specific logs
+│   ├── performance/                # Performance monitoring logs
+│   └── errors/                     # Error logs
+│
+└── deployment/                     # Deployment configurations
+    ├── docker/                     # Docker configurations
+    │   ├── Dockerfile
+    │   └── docker-compose.yml
+    │
+    ├── kubernetes/                 # Kubernetes manifests
+    │   ├── deployment.yaml
+    │   └── service.yaml
+    │
+    └── cloud/                      # Cloud deployment templates
+        ├── aws/                    # AWS CloudFormation/CDK
+        ├── gcp/                    # Google Cloud Deployment Manager
+        └── azure/                  # Azure Resource Manager
+```
+
+### Key Directory Explanations
+
+#### `/agents/` - AI Agents
+- **`core/`**: Main business logic agents that handle resume building workflow
+- **`data/`**: Agents responsible for data persistence and file management
+- **`analytics/`**: Agents focused on feedback analysis and continuous learning
+- **`workflows/`**: Orchestration agents that manage complex multi-step processes
+
+#### `/tools/` - Utility Tools
+- **`text_processing/`**: Text analysis, keyword extraction, and content optimization
+- **`document_generation/`**: Document formatting and export functionality
+- **`analytics/`**: Metrics calculation and performance analysis tools
+- **`data_validation/`**: Input validation and data quality assurance
+- **`integrations/`**: External service connectors and API clients
+
+#### `/config/` - Configuration Management
+- YAML configuration files for different system components
+- Environment-specific settings and agent parameters
+- Pipeline and workflow configurations
+
+#### `/data/` - Data Storage
+- SQLite database files and backups
+- Document templates for various output formats
+- Sample files and generated exports
+
+#### `/tests/` - Comprehensive Testing
+- Unit tests for individual components
+- Integration tests for workflows
+- End-to-end tests for complete user journeys
+- Performance and load testing
+
+This structure follows SOLID principles and maintains clear separation of concerns, making the codebase maintainable and scalable.
+
 ## 🏗️ Architecture
 
 This application implements a sophisticated multi-agent system using several ADK patterns:
