@@ -200,6 +200,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+input/
 output/
 idea/
 content/
