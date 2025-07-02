@@ -3,9 +3,6 @@ python-dotenv>=1.0.0
 qdrant-client>=1.7.0
 google-adk
 
-# File processing dependencies
-zipfile-deflate64>=0.2.0
-
 # Optional: Add these if you plan to use more advanced embedding models
 # openai>=1.0.0
 # sentence-transformers>=2.2.0

@@ -200,9 +200,8 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Movie data
-movie-reels/
 outputs/
 idea/
 content/
 docs/
+prompts/
