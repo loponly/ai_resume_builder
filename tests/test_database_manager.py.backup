@@ -1,0 +1,293 @@
+"""Tests for the database manager."""
+
+import pytest
+from unittest.mock import Mock, patch, AsyncMock
+import tempfile
+import os
+import sys
+from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from agents.data.database_manager import DatabaseManager
+
+
+class TestDatabaseManager:
+    """Test cases for the DatabaseManager class."""
+    
+    @pytest.fixture
+    def temp_db_path(self):
+        """Create a temporary database path for testing."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            yield os.path.join(temp_dir, "test.db")
+    
+    @pytest.fixture
+    def db_manager(self, temp_db_path):
+        """Create a database manager with temporary database."""
+        return DatabaseManager(db_path=temp_db_path)
+    
+    def test_initialization_default(self):
+        """Test initialization with default parameters."""
+        db_manager = DatabaseManager()
+        assert db_manager.name == "DatabaseManager"
+        assert "database operations" in db_manager.description
+        assert db_manager.db_path == "data/resume_builder.db"
+    
+    def test_initialization_custom_path(self, temp_db_path):
+        """Test initialization with custom database path."""
+        db_manager = DatabaseManager(db_path=temp_db_path)
+        assert db_manager.db_path == temp_db_path
+    
+    async def test_process_save_result(self, db_manager):
+        """Test saving a result to the database."""
+        input_data = {
+            "operation": "save",
+            "data": {
+                "user_id": "test_user",
+                "session_id": "test_session",
+                "tailored_resume": "Resume content...",
+                "cover_letter": "Cover letter content...",
+                "quality_score": 85,
+                "ats_score": 90
+            }
+        }
+        
+        result = await db_manager.process(input_data)
+        
+        assert result["success"] is True
+        assert "record_id" in result
+        assert result["operation"] == "save"
+    
+    async def test_process_retrieve_result(self, db_manager):
+        """Test retrieving a result from the database."""
+        # First save a result
+        save_data = {
+            "operation": "save",
+            "data": {
+                "user_id": "test_user",
+                "session_id": "test_session",
+                "tailored_resume": "Resume content...",
+                "cover_letter": "Cover letter content...",
+                "quality_score": 85,
+                "ats_score": 90
+            }
+        }
+        save_result = await db_manager.process(save_data)
+        record_id = save_result["record_id"]
+        
+        # Then retrieve it
+        retrieve_data = {
+            "operation": "retrieve",
+            "record_id": record_id
+        }
+        
+        result = await db_manager.process(retrieve_data)
+        
+        assert result["success"] is True
+        assert result["operation"] == "retrieve"
+        assert "data" in result
+        assert result["data"]["user_id"] == "test_user"
+        assert result["data"]["session_id"] == "test_session"
+    
+    async def test_process_list_results(self, db_manager):
+        """Test listing results from the database."""
+        # Save multiple results
+        for i in range(3):
+            save_data = {
+                "operation": "save",
+                "data": {
+                    "user_id": f"user_{i}",
+                    "session_id": f"session_{i}",
+                    "tailored_resume": f"Resume {i}",
+                    "cover_letter": f"Cover letter {i}",
+                    "quality_score": 80 + i,
+                    "ats_score": 85 + i
+                }
+            }
+            await db_manager.process(save_data)
+        
+        # List all results
+        list_data = {
+            "operation": "list",
+            "user_id": "user_1"
+        }
+        
+        result = await db_manager.process(list_data)
+        
+        assert result["success"] is True
+        assert result["operation"] == "list"
+        assert "data" in result
+        assert len(result["data"]) >= 1  # At least the user_1 record
+    
+    async def test_process_update_result(self, db_manager):
+        """Test updating a result in the database."""
+        # First save a result
+        save_data = {
+            "operation": "save",
+            "data": {
+                "user_id": "test_user",
+                "session_id": "test_session",
+                "tailored_resume": "Original resume",
+                "cover_letter": "Original cover letter",
+                "quality_score": 80,
+                "ats_score": 85
+            }
+        }
+        save_result = await db_manager.process(save_data)
+        record_id = save_result["record_id"]
+        
+        # Then update it
+        update_data = {
+            "operation": "update",
+            "record_id": record_id,
+            "data": {
+                "tailored_resume": "Updated resume",
+                "quality_score": 90
+            }
+        }
+        
+        result = await db_manager.process(update_data)
+        
+        assert result["success"] is True
+        assert result["operation"] == "update"
+        
+        # Verify the update
+        retrieve_data = {
+            "operation": "retrieve",
+            "record_id": record_id
+        }
+        retrieved = await db_manager.process(retrieve_data)
+        assert retrieved["data"]["tailored_resume"] == "Updated resume"
+        assert retrieved["data"]["quality_score"] == 90
+        assert retrieved["data"]["cover_letter"] == "Original cover letter"  # Should remain unchanged
+    
+    async def test_process_delete_result(self, db_manager):
+        """Test deleting a result from the database."""
+        # First save a result
+        save_data = {
+            "operation": "save",
+            "data": {
+                "user_id": "test_user",
+                "session_id": "test_session",
+                "tailored_resume": "Resume to delete",
+                "cover_letter": "Cover letter to delete",
+                "quality_score": 80,
+                "ats_score": 85
+            }
+        }
+        save_result = await db_manager.process(save_data)
+        record_id = save_result["record_id"]
+        
+        # Then delete it
+        delete_data = {
+            "operation": "delete",
+            "record_id": record_id
+        }
+        
+        result = await db_manager.process(delete_data)
+        
+        assert result["success"] is True
+        assert result["operation"] == "delete"
+        
+        # Verify it's deleted
+        retrieve_data = {
+            "operation": "retrieve",
+            "record_id": record_id
+        }
+        retrieved = await db_manager.process(retrieve_data)
+        assert retrieved["success"] is False
+        assert "not found" in retrieved["error"].lower()
+    
+    async def test_process_invalid_operation(self, db_manager):
+        """Test handling of invalid operations."""
+        input_data = {
+            "operation": "invalid_operation",
+            "data": {}
+        }
+        
+        result = await db_manager.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "Unsupported operation" in result["error"]
+    
+    async def test_process_missing_operation(self, db_manager):
+        """Test handling of missing operation."""
+        input_data = {
+            "data": {"user_id": "test"}
+        }
+        
+        result = await db_manager.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "operation" in result["error"].lower()
+    
+    async def test_process_missing_data_for_save(self, db_manager):
+        """Test handling of missing data for save operation."""
+        input_data = {
+            "operation": "save"
+        }
+        
+        result = await db_manager.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+    
+    async def test_process_missing_record_id_for_retrieve(self, db_manager):
+        """Test handling of missing record_id for retrieve operation."""
+        input_data = {
+            "operation": "retrieve"
+        }
+        
+        result = await db_manager.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "record_id" in result["error"].lower()
+    
+    async def test_process_nonexistent_record_retrieve(self, db_manager):
+        """Test retrieving a nonexistent record."""
+        input_data = {
+            "operation": "retrieve",
+            "record_id": "nonexistent_id"
+        }
+        
+        result = await db_manager.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "not found" in result["error"].lower()
+    
+    def test_database_file_creation(self, temp_db_path):
+        """Test that database file is created when needed."""
+        # Database file should not exist initially
+        assert not os.path.exists(temp_db_path)
+        
+        # Create database manager
+        db_manager = DatabaseManager(db_path=temp_db_path)
+        
+        # After processing a save operation, database should be created
+        import asyncio
+        save_data = {
+            "operation": "save",
+            "data": {
+                "user_id": "test_user",
+                "session_id": "test_session",
+                "tailored_resume": "Test resume",
+                "cover_letter": "Test cover letter",
+                "quality_score": 80,
+                "ats_score": 85
+            }
+        }
+        
+        # Run the async process method
+        asyncio.run(db_manager.process(save_data))
+        
+        # Database file should now exist
+        assert os.path.exists(temp_db_path)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

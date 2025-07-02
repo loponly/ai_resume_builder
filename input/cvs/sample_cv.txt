@@ -1,0 +1,55 @@
+John Doe
+Software Engineer
+Email: john.doe@email.com
+Phone: (555) 123-4567
+Location: San Francisco, CA
+
+PROFESSIONAL SUMMARY
+Experienced software engineer with 5+ years of expertise in Python, JavaScript, and cloud technologies. Proven track record of leading development teams and delivering scalable solutions. Strong background in microservices architecture, CI/CD pipelines, and agile methodologies.
+
+TECHNICAL SKILLS
+Programming Languages: Python, JavaScript, Java, TypeScript, Go
+Web Technologies: React, Node.js, Express, Django, Flask
+Cloud & DevOps: AWS, Docker, Kubernetes, Jenkins, GitLab CI
+Databases: PostgreSQL, MongoDB, Redis, MySQL
+Tools & Frameworks: Git, JIRA, Terraform, Ansible
+
+PROFESSIONAL EXPERIENCE
+
+Senior Python Developer | TechCorp Inc. | San Francisco, CA | 2020-2023
+• Led development of microservices architecture serving 1M+ daily users
+• Implemented CI/CD pipelines reducing deployment time by 60%
+• Managed team of 5 developers using agile methodologies
+• Increased system performance by 40% through optimization initiatives
+• Collaborated with cross-functional teams on product roadmap planning
+
+Full Stack Developer | StartupXYZ | San Francisco, CA | 2018-2020
+• Developed and maintained web applications using React and Node.js
+• Built RESTful APIs handling 10,000+ requests per minute
+• Implemented automated testing reducing bugs by 50%
+• Participated in code reviews and mentored junior developers
+• Contributed to technical architecture decisions
+
+Junior Software Developer | DevCorp | San Jose, CA | 2017-2018
+• Developed features for e-commerce platform using Python and Django
+• Worked on database optimization improving query performance by 30%
+• Participated in agile development processes and daily standups
+• Contributed to documentation and best practices
+
+EDUCATION
+Bachelor of Science in Computer Science
+University of California, Berkeley | 2017
+GPA: 3.8/4.0
+
+CERTIFICATIONS
+• AWS Certified Solutions Architect - Associate (2022)
+• Certified Kubernetes Administrator (2021)
+• Google Cloud Professional Developer (2020)
+
+PROJECTS
+• Open Source Contributor - Contributed to popular Python libraries with 1000+ stars
+• Personal Project - Built a task management app with React and Node.js
+• Hackathon Winner - First place in Bay Area Tech Hackathon 2019
+
+LANGUAGES
+English (Native), Spanish (Conversational)

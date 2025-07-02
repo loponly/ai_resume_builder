@@ -1,0 +1,41 @@
+# Agent Configuration for AI Resume Builder
+
+coordinator:
+  model: "gemini-2.0-flash-exp"
+  max_tokens: 2000
+  temperature: 0.7
+
+cv_analyzer:
+  model: "gemini-2.0-flash-exp"
+  max_tokens: 1500
+  temperature: 0.5
+  focus: "data_extraction"
+
+job_parser:
+  model: "gemini-2.0-flash-exp"
+  max_tokens: 1500
+  temperature: 0.5
+  focus: "requirement_analysis"
+
+resume_tailor:
+  model: "gemini-2.0-flash-exp"
+  max_tokens: 2000
+  temperature: 0.6
+  focus: "content_optimization"
+
+cover_letter_generator:
+  model: "gemini-2.0-flash-exp"
+  max_tokens: 1500
+  temperature: 0.7
+  focus: "personalization"
+
+quality_reviewer:
+  model: "gemini-2.0-flash-exp"
+  max_tokens: 1500
+  temperature: 0.3
+  quality_threshold: 0.85
+
+database_manager:
+  db_path: "data/database/resume_builder.db"
+  auto_vacuum: true
+  backup_enabled: true

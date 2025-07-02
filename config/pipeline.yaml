@@ -1,0 +1,34 @@
+# Pipeline Configuration for AI Resume Builder
+
+workflow:
+  max_refinement_iterations: 3
+  parallel_timeout: 30
+  quality_threshold: 0.85
+  enable_iterative_improvement: true
+
+processing:
+  batch_size: 1
+  concurrent_sessions: 5
+  session_timeout: 300 # 5 minutes
+
+output:
+  formats: ["txt", "json"]
+  export_location: "data/exports"
+  include_metadata: true
+
+quality:
+  min_resume_score: 0.80
+  min_cover_letter_score: 0.75
+  ats_compatibility_threshold: 0.85
+  require_review_approval: true
+
+database:
+  connection_pool_size: 10
+  performance_tracking: true
+  auto_backup: true
+  backup_frequency: "daily"
+
+analytics:
+  track_user_behavior: true
+  export_formats: ["json", "csv"]
+  retention_days: 365

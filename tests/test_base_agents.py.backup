@@ -1,0 +1,107 @@
+"""Tests for the base agent classes."""
+
+import pytest
+from unittest.mock import Mock, AsyncMock
+import sys
+from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from agents.base.base_agent import ResumeBuilderBaseAgent
+from agents.base.llm_agent import ResumeBuilderLlmAgent
+
+
+class ConcreteBaseAgent(ResumeBuilderBaseAgent):
+    """Concrete implementation of base agent for testing."""
+    
+    async def process(self, input_data: dict) -> dict:
+        """Mock process method."""
+        return {"processed": True, "input": input_data}
+
+
+class TestResumeBuilderBaseAgent:
+    """Test cases for the ResumeBuilderBaseAgent class."""
+    
+    @pytest.fixture
+    def agent(self):
+        """Create a concrete base agent for testing."""
+        return ConcreteBaseAgent(
+            name="TestAgent",
+            description="A test agent"
+        )
+    
+    def test_initialization(self, agent):
+        """Test that the base agent initializes correctly."""
+        assert agent.name == "TestAgent"
+        assert agent.description == "A test agent"
+        assert hasattr(agent, 'process')
+    
+    async def test_process_method(self, agent):
+        """Test that the process method works correctly."""
+        input_data = {"test": "data"}
+        result = await agent.process(input_data)
+        
+        assert result["processed"] is True
+        assert result["input"] == input_data
+    
+    def test_string_representation(self, agent):
+        """Test the string representation of the agent."""
+        str_repr = str(agent)
+        assert "TestAgent" in str_repr
+        assert "A test agent" in str_repr
+
+
+class TestResumeBuilderLlmAgent:
+    """Test cases for the ResumeBuilderLlmAgent class."""
+    
+    def test_initialization_minimal(self):
+        """Test minimal initialization of LLM agent."""
+        agent = ResumeBuilderLlmAgent(
+            name="TestLLMAgent",
+            model="gemini-1.5-flash"
+        )
+        
+        assert agent.name == "TestLLMAgent"
+        # Note: Cannot easily test the model assignment without mocking the ADK internals
+    
+    def test_initialization_with_options(self):
+        """Test initialization with all options."""
+        agent = ResumeBuilderLlmAgent(
+            name="TestLLMAgent",
+            model="gemini-1.5-flash",
+            description="Test LLM agent",
+            instruction="Test instruction",
+            global_instruction="Global instruction",
+            output_key="test_output"
+        )
+        
+        assert agent.name == "TestLLMAgent"
+        # Note: Additional assertions would require mocking ADK internals
+    
+    def test_initialization_with_tools(self):
+        """Test initialization with tools."""
+        mock_tool = Mock()
+        agent = ResumeBuilderLlmAgent(
+            name="TestLLMAgent",
+            model="gemini-1.5-flash",
+            tools=[mock_tool]
+        )
+        
+        assert agent.name == "TestLLMAgent"
+        # Tools are passed to the parent LlmAgent, hard to test without mocking
+    
+    def test_string_representation(self):
+        """Test the string representation of the LLM agent."""
+        agent = ResumeBuilderLlmAgent(
+            name="TestLLMAgent",
+            model="gemini-1.5-flash",
+            description="Test LLM agent"
+        )
+        
+        str_repr = str(agent)
+        assert "TestLLMAgent" in str_repr
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

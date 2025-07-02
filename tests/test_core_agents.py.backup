@@ -1,0 +1,281 @@
+"""Tests for the core agent classes."""
+
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+import sys
+from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from agents.core.cv_analyzer import CVAnalyzer
+from agents.core.job_parser import JobDescriptionParser
+from agents.core.resume_tailor import ResumeTailor
+from agents.core.cover_letter_gen import CoverLetterGenerator
+from agents.core.quality_reviewer import QualityReviewer
+from agents.core.simple_coordinator import SimpleResumeBuilderCoordinator
+
+
+class TestCVAnalyzer:
+    """Test cases for the CVAnalyzer class."""
+    
+    @pytest.fixture
+    def analyzer(self):
+        """Create a CV analyzer for testing."""
+        return CVAnalyzer()
+    
+    def test_initialization(self, analyzer):
+        """Test that the CV analyzer initializes correctly."""
+        assert analyzer.name == "CVAnalyzer"
+        assert "CV and resume analysis" in analyzer.description
+        assert hasattr(analyzer, 'process')
+    
+    async def test_process_valid_cv(self, analyzer):
+        """Test processing a valid CV."""
+        cv_data = {
+            "cv_content": """
+            John Doe
+            Software Engineer
+            Email: john.doe@email.com
+            Phone: (555) 123-4567
+            
+            EXPERIENCE:
+            Senior Developer at TechCorp (2020-2023)
+            - Developed web applications using Python and JavaScript
+            """
+        }
+        
+        result = await analyzer.process(cv_data)
+        
+        assert result["success"] is True
+        assert "analysis" in result
+        assert "skills" in result["analysis"]
+        assert "experience" in result["analysis"]
+        assert len(result["analysis"]["skills"]) > 0
+        assert len(result["analysis"]["experience"]) > 0
+    
+    async def test_process_empty_cv(self, analyzer):
+        """Test processing an empty CV."""
+        cv_data = {"cv_content": ""}
+        
+        result = await analyzer.process(cv_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+    
+    async def test_process_invalid_input(self, analyzer):
+        """Test processing with invalid input."""
+        invalid_data = {"invalid_key": "value"}
+        
+        result = await analyzer.process(invalid_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+
+
+class TestJobDescriptionParser:
+    """Test cases for the JobDescriptionParser class."""
+    
+    @pytest.fixture
+    def parser(self):
+        """Create a job description parser for testing."""
+        return JobDescriptionParser()
+    
+    def test_initialization(self, parser):
+        """Test that the job parser initializes correctly."""
+        assert parser.name == "JobDescriptionParser"
+        assert "job description analysis" in parser.description
+        assert hasattr(parser, 'process')
+    
+    async def test_process_valid_job_description(self, parser):
+        """Test processing a valid job description."""
+        job_data = {
+            "job_description": """
+            Senior Full Stack Developer
+            TechFlow AI
+            
+            Requirements:
+            - 5+ years of software development experience
+            - Python, JavaScript, React experience
+            - Experience with cloud platforms (AWS, GCP)
+            """
+        }
+        
+        result = await parser.process(job_data)
+        
+        assert result["success"] is True
+        assert "analysis" in result
+        assert "requirements" in result["analysis"]
+        assert "skills_needed" in result["analysis"]
+        assert len(result["analysis"]["requirements"]) > 0
+    
+    async def test_process_empty_job_description(self, parser):
+        """Test processing an empty job description."""
+        job_data = {"job_description": ""}
+        
+        result = await parser.process(job_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+
+
+class TestResumeTailor:
+    """Test cases for the ResumeTailor class."""
+    
+    @pytest.fixture
+    def tailor(self):
+        """Create a resume tailor for testing."""
+        return ResumeTailor()
+    
+    def test_initialization(self, tailor):
+        """Test that the resume tailor initializes correctly."""
+        assert tailor.name == "ResumeTailor"
+        assert "resume tailoring" in tailor.description
+        assert hasattr(tailor, 'process')
+    
+    async def test_process_valid_input(self, tailor):
+        """Test processing with valid CV and job analysis."""
+        input_data = {
+            "cv_analysis": {
+                "skills": ["Python", "JavaScript"],
+                "experience": ["Software Development"]
+            },
+            "job_analysis": {
+                "requirements": ["Python experience", "5+ years experience"],
+                "skills_needed": ["Python", "React"]
+            }
+        }
+        
+        result = await tailor.process(input_data)
+        
+        assert result["success"] is True
+        assert "tailored_resume" in result
+        assert len(result["tailored_resume"]) > 0
+    
+    async def test_process_missing_data(self, tailor):
+        """Test processing with missing data."""
+        input_data = {"cv_analysis": {}}
+        
+        result = await tailor.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+
+
+class TestCoverLetterGenerator:
+    """Test cases for the CoverLetterGenerator class."""
+    
+    @pytest.fixture
+    def generator(self):
+        """Create a cover letter generator for testing."""
+        return CoverLetterGenerator()
+    
+    def test_initialization(self, generator):
+        """Test that the cover letter generator initializes correctly."""
+        assert generator.name == "CoverLetterGenerator"
+        assert "cover letter generation" in generator.description
+        assert hasattr(generator, 'process')
+    
+    async def test_process_valid_input(self, generator):
+        """Test processing with valid input data."""
+        input_data = {
+            "cv_analysis": {
+                "skills": ["Python", "JavaScript"],
+                "experience": ["Software Development"]
+            },
+            "job_analysis": {
+                "company": "TechFlow AI",
+                "position": "Senior Developer",
+                "requirements": ["Python experience"]
+            },
+            "tailored_resume": "Tailored resume content..."
+        }
+        
+        result = await generator.process(input_data)
+        
+        assert result["success"] is True
+        assert "cover_letter" in result
+        assert len(result["cover_letter"]) > 0
+        assert "TechFlow AI" in result["cover_letter"]
+    
+    async def test_process_missing_data(self, generator):
+        """Test processing with missing data."""
+        input_data = {}
+        
+        result = await generator.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+
+
+class TestQualityReviewer:
+    """Test cases for the QualityReviewer class."""
+    
+    @pytest.fixture
+    def reviewer(self):
+        """Create a quality reviewer for testing."""
+        return QualityReviewer(quality_threshold=0.75)
+    
+    def test_initialization(self, reviewer):
+        """Test that the quality reviewer initializes correctly."""
+        assert reviewer.name == "QualityReviewer"
+        assert reviewer.quality_threshold == 0.75
+        assert "quality review and scoring" in reviewer.description
+        assert hasattr(reviewer, 'process')
+    
+    async def test_process_valid_input(self, reviewer):
+        """Test processing with valid input data."""
+        input_data = {
+            "tailored_resume": "Well-formatted resume with relevant skills...",
+            "cover_letter": "Professional cover letter addressing the role...",
+            "job_analysis": {
+                "requirements": ["Python", "JavaScript", "5+ years experience"],
+                "skills_needed": ["Python", "React"]
+            }
+        }
+        
+        result = await reviewer.process(input_data)
+        
+        assert result["success"] is True
+        assert "quality_review" in result
+        assert "ats_score" in result
+        assert "overall_score" in result
+        assert isinstance(result["ats_score"], (int, float))
+        assert isinstance(result["overall_score"], (int, float))
+        assert 0 <= result["ats_score"] <= 100
+        assert 0 <= result["overall_score"] <= 100
+    
+    async def test_process_missing_data(self, reviewer):
+        """Test processing with missing data."""
+        input_data = {}
+        
+        result = await reviewer.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+    
+    def test_different_quality_threshold(self):
+        """Test initialization with different quality threshold."""
+        reviewer = QualityReviewer(quality_threshold=0.90)
+        assert reviewer.quality_threshold == 0.90
+
+
+class TestSimpleResumeBuilderCoordinator:
+    """Test cases for the SimpleResumeBuilderCoordinator class."""
+    
+    def test_initialization(self):
+        """Test that the simple coordinator initializes correctly."""
+        coordinator = SimpleResumeBuilderCoordinator()
+        assert coordinator.name == "SimpleResumeBuilderCoordinator"
+        # Note: Cannot easily test LLM-specific properties without mocking ADK
+    
+    def test_initialization_with_kwargs(self):
+        """Test initialization with additional keyword arguments."""
+        coordinator = SimpleResumeBuilderCoordinator(
+            description="Test coordinator"
+        )
+        assert coordinator.name == "SimpleResumeBuilderCoordinator"
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

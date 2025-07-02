@@ -2,6 +2,12 @@
 python-dotenv>=1.0.0
 qdrant-client>=1.7.0
 google-adk
+google-generativeai>=0.8.0
+
+# Testing dependencies
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.10.0
 
 # Optional: Add these if you plan to use more advanced embedding models
 # openai>=1.0.0

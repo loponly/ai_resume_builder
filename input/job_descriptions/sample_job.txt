@@ -1,0 +1,72 @@
+Senior Full Stack Developer - AI Startup
+TechFlow AI | San Francisco, CA | Remote/Hybrid
+
+About TechFlow AI:
+We are a fast-growing AI startup revolutionizing how businesses interact with their data. Our platform combines cutting-edge machine learning with intuitive user interfaces to deliver actionable insights. We're looking for passionate engineers to join our mission of democratizing AI.
+
+Position Overview:
+We are seeking a Senior Full Stack Developer to join our dynamic engineering team. You'll work on building scalable web applications that power our AI platform, collaborate with ML engineers, and help shape our technical architecture. This is an opportunity to make a significant impact in a growing company.
+
+Key Responsibilities:
+• Design and develop scalable full-stack web applications using modern frameworks
+• Collaborate with ML engineers to integrate AI models into user-facing applications
+• Build robust APIs and microservices architecture
+• Implement responsive, intuitive user interfaces
+• Lead technical discussions and mentor junior developers
+• Participate in code reviews and maintain high code quality standards
+• Work with product managers to translate requirements into technical solutions
+• Optimize application performance and scalability
+• Contribute to technical documentation and best practices
+
+Required Qualifications:
+• 5+ years of professional software development experience
+• Strong proficiency in Python and JavaScript/TypeScript
+• Experience with modern web frameworks (React, Vue.js, or Angular)
+• Backend development experience with frameworks like Django, Flask, or FastAPI
+• Experience with cloud platforms (AWS, GCP, or Azure)
+• Proficiency with containerization (Docker) and orchestration (Kubernetes)
+• Strong understanding of database design (SQL and NoSQL)
+• Experience with CI/CD pipelines and DevOps practices
+• Familiarity with machine learning concepts and model deployment
+• Experience with version control systems (Git)
+• Strong problem-solving skills and attention to detail
+• Excellent communication and collaboration skills
+• Bachelor's degree in Computer Science, Engineering, or related field
+
+Preferred Qualifications:
+• Experience with machine learning frameworks (TensorFlow, PyTorch, scikit-learn)
+• Knowledge of data processing and analytics tools
+• Experience with real-time applications and WebSocket connections
+• Familiarity with monitoring and logging tools (Prometheus, Grafana, ELK stack)
+• Experience with agile development methodologies
+• Previous startup experience
+• Contributions to open-source projects
+• Experience with A/B testing and feature flags
+• Knowledge of security best practices
+
+Technical Stack:
+• Frontend: React, TypeScript, Tailwind CSS
+• Backend: Python, FastAPI, Django
+• Database: PostgreSQL, Redis, MongoDB
+• Cloud: AWS (EC2, S3, RDS, Lambda)
+• DevOps: Docker, Kubernetes, GitHub Actions
+• Monitoring: Prometheus, Grafana, Sentry
+• ML Tools: TensorFlow, PyTorch, MLflow
+
+What We Offer:
+• Competitive salary and equity package
+• Health, dental, and vision insurance
+• Flexible work arrangements (remote/hybrid)
+• Professional development budget
+• Latest tech equipment and tools
+• Collaborative and innovative work environment
+• Opportunity to work with cutting-edge AI technology
+• Career growth opportunities in a fast-growing company
+
+Company Culture:
+At TechFlow AI, we value innovation, collaboration, and continuous learning. We believe in empowering our team members to take ownership of their work and make meaningful contributions. Our culture is built on transparency, respect, and a shared passion for solving complex problems with technology.
+
+Application Process:
+Please submit your resume along with a cover letter explaining your interest in AI and how your experience aligns with our mission. Include links to your GitHub profile and any relevant projects or portfolios.
+
+TechFlow AI is an equal opportunity employer committed to diversity and inclusion. We welcome applications from all qualified candidates regardless of race, gender, age, religion, sexual orientation, or disability status.

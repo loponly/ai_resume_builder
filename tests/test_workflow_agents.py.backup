@@ -1,0 +1,304 @@
+"""Tests for the workflow agent classes."""
+
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+import sys
+from pathlib import Path
+
+# Add the project root to the Python path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from agents.workflows.sequential_agent import ResumeBuilderSequentialAgent
+from agents.workflows.parallel_agent import ResumeBuilderParallelAgent
+from agents.workflows.loop_agent import ResumeBuilderLoopAgent
+
+
+class MockAgent:
+    """Mock agent for testing workflow agents."""
+    
+    def __init__(self, name: str, return_value: dict = None):
+        self.name = name
+        self.return_value = return_value or {"success": True, "data": f"processed by {name}"}
+        self.call_count = 0
+    
+    async def process(self, input_data: dict) -> dict:
+        """Mock process method."""
+        self.call_count += 1
+        return self.return_value
+
+
+class TestResumeBuilderSequentialAgent:
+    """Test cases for the ResumeBuilderSequentialAgent class."""
+    
+    @pytest.fixture
+    def mock_agents(self):
+        """Create mock agents for testing."""
+        return [
+            MockAgent("Agent1", {"success": True, "step1": "complete"}),
+            MockAgent("Agent2", {"success": True, "step2": "complete"}),
+            MockAgent("Agent3", {"success": True, "step3": "complete"})
+        ]
+    
+    @pytest.fixture
+    def sequential_agent(self, mock_agents):
+        """Create a sequential agent with mock sub-agents."""
+        return ResumeBuilderSequentialAgent(
+            name="TestSequentialAgent",
+            sub_agents=mock_agents,
+            description="Test sequential workflow"
+        )
+    
+    def test_initialization(self, sequential_agent, mock_agents):
+        """Test that the sequential agent initializes correctly."""
+        assert sequential_agent.name == "TestSequentialAgent"
+        assert sequential_agent.description == "Test sequential workflow"
+        assert len(sequential_agent.sub_agents) == 3
+        assert sequential_agent.sub_agents == mock_agents
+    
+    async def test_process_success(self, sequential_agent, mock_agents):
+        """Test successful sequential processing."""
+        input_data = {"initial": "data"}
+        result = await sequential_agent.process(input_data)
+        
+        assert result["success"] is True
+        assert "results" in result
+        assert len(result["results"]) == 3
+        
+        # Verify all agents were called
+        for agent in mock_agents:
+            assert agent.call_count == 1
+    
+    async def test_process_agent_failure(self, mock_agents):
+        """Test handling of agent failure in sequential processing."""
+        # Make second agent fail
+        mock_agents[1].return_value = {"success": False, "error": "Agent2 failed"}
+        
+        sequential_agent = ResumeBuilderSequentialAgent(
+            name="TestSequentialAgent",
+            sub_agents=mock_agents,
+            description="Test sequential workflow"
+        )
+        
+        input_data = {"initial": "data"}
+        result = await sequential_agent.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "Agent2 failed" in result["error"]
+        
+        # Verify only agents up to the failure were called
+        assert mock_agents[0].call_count == 1
+        assert mock_agents[1].call_count == 1
+        assert mock_agents[2].call_count == 0  # Should not be called after failure
+    
+    async def test_process_empty_agents(self):
+        """Test processing with no sub-agents."""
+        sequential_agent = ResumeBuilderSequentialAgent(
+            name="EmptySequentialAgent",
+            sub_agents=[],
+            description="Empty workflow"
+        )
+        
+        input_data = {"initial": "data"}
+        result = await sequential_agent.process(input_data)
+        
+        assert result["success"] is True
+        assert "results" in result
+        assert len(result["results"]) == 0
+
+
+class TestResumeBuilderParallelAgent:
+    """Test cases for the ResumeBuilderParallelAgent class."""
+    
+    @pytest.fixture
+    def mock_agents(self):
+        """Create mock agents for testing."""
+        return [
+            MockAgent("Agent1", {"success": True, "task1": "complete"}),
+            MockAgent("Agent2", {"success": True, "task2": "complete"}),
+            MockAgent("Agent3", {"success": True, "task3": "complete"})
+        ]
+    
+    @pytest.fixture
+    def parallel_agent(self, mock_agents):
+        """Create a parallel agent with mock sub-agents."""
+        return ResumeBuilderParallelAgent(
+            name="TestParallelAgent",
+            sub_agents=mock_agents,
+            description="Test parallel workflow"
+        )
+    
+    def test_initialization(self, parallel_agent, mock_agents):
+        """Test that the parallel agent initializes correctly."""
+        assert parallel_agent.name == "TestParallelAgent"
+        assert parallel_agent.description == "Test parallel workflow"
+        assert len(parallel_agent.sub_agents) == 3
+        assert parallel_agent.sub_agents == mock_agents
+    
+    async def test_process_success(self, parallel_agent, mock_agents):
+        """Test successful parallel processing."""
+        input_data = {"shared": "data"}
+        result = await parallel_agent.process(input_data)
+        
+        assert result["success"] is True
+        assert "results" in result
+        assert len(result["results"]) == 3
+        
+        # Verify all agents were called
+        for agent in mock_agents:
+            assert agent.call_count == 1
+    
+    async def test_process_partial_failure(self, mock_agents):
+        """Test handling of partial failure in parallel processing."""
+        # Make second agent fail
+        mock_agents[1].return_value = {"success": False, "error": "Agent2 failed"}
+        
+        parallel_agent = ResumeBuilderParallelAgent(
+            name="TestParallelAgent",
+            sub_agents=mock_agents,
+            description="Test parallel workflow"
+        )
+        
+        input_data = {"shared": "data"}
+        result = await parallel_agent.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "1 out of 3 agents failed" in result["error"]
+        
+        # Verify all agents were called (parallel execution)
+        for agent in mock_agents:
+            assert agent.call_count == 1
+    
+    async def test_process_empty_agents(self):
+        """Test processing with no sub-agents."""
+        parallel_agent = ResumeBuilderParallelAgent(
+            name="EmptyParallelAgent",
+            sub_agents=[],
+            description="Empty workflow"
+        )
+        
+        input_data = {"shared": "data"}
+        result = await parallel_agent.process(input_data)
+        
+        assert result["success"] is True
+        assert "results" in result
+        assert len(result["results"]) == 0
+
+
+class TestResumeBuilderLoopAgent:
+    """Test cases for the ResumeBuilderLoopAgent class."""
+    
+    @pytest.fixture
+    def mock_agent(self):
+        """Create a mock agent for loop testing."""
+        return MockAgent("LoopAgent", {"success": True, "iteration": "complete"})
+    
+    @pytest.fixture
+    def loop_agent(self, mock_agent):
+        """Create a loop agent with a mock sub-agent."""
+        return ResumeBuilderLoopAgent(
+            name="TestLoopAgent",
+            sub_agent=mock_agent,
+            description="Test loop workflow",
+            max_iterations=3
+        )
+    
+    def test_initialization(self, loop_agent, mock_agent):
+        """Test that the loop agent initializes correctly."""
+        assert loop_agent.name == "TestLoopAgent"
+        assert loop_agent.description == "Test loop workflow"
+        assert loop_agent.sub_agent == mock_agent
+        assert loop_agent.max_iterations == 3
+    
+    async def test_process_success(self, loop_agent, mock_agent):
+        """Test successful loop processing."""
+        input_data = {"iteration": 0}
+        result = await loop_agent.process(input_data)
+        
+        assert result["success"] is True
+        assert "results" in result
+        assert len(result["results"]) == 3  # max_iterations
+        
+        # Verify agent was called the correct number of times
+        assert mock_agent.call_count == 3
+    
+    async def test_process_early_termination(self, mock_agent):
+        """Test loop with early termination condition."""
+        # Mock agent that signals completion after 2 iterations
+        class EarlyTerminationAgent(MockAgent):
+            def __init__(self):
+                super().__init__("EarlyTerminationAgent")
+                self.iteration_count = 0
+            
+            async def process(self, input_data: dict) -> dict:
+                self.iteration_count += 1
+                self.call_count += 1
+                
+                if self.iteration_count >= 2:
+                    return {"success": True, "completed": True}
+                else:
+                    return {"success": True, "completed": False}
+        
+        early_agent = EarlyTerminationAgent()
+        loop_agent = ResumeBuilderLoopAgent(
+            name="EarlyTerminationLoop",
+            sub_agent=early_agent,
+            description="Test early termination",
+            max_iterations=5
+        )
+        
+        input_data = {"iteration": 0}
+        result = await loop_agent.process(input_data)
+        
+        assert result["success"] is True
+        assert "results" in result
+        assert len(result["results"]) == 2  # Should stop after 2 iterations
+        assert early_agent.call_count == 2
+    
+    async def test_process_agent_failure(self, mock_agent):
+        """Test handling of agent failure in loop processing."""
+        # Make agent fail on second iteration
+        class FailingAgent(MockAgent):
+            def __init__(self):
+                super().__init__("FailingAgent")
+                self.iteration_count = 0
+            
+            async def process(self, input_data: dict) -> dict:
+                self.iteration_count += 1
+                self.call_count += 1
+                
+                if self.iteration_count == 2:
+                    return {"success": False, "error": "Agent failed on iteration 2"}
+                else:
+                    return {"success": True, "completed": False}
+        
+        failing_agent = FailingAgent()
+        loop_agent = ResumeBuilderLoopAgent(
+            name="FailingLoop",
+            sub_agent=failing_agent,
+            description="Test failure handling",
+            max_iterations=5
+        )
+        
+        input_data = {"iteration": 0}
+        result = await loop_agent.process(input_data)
+        
+        assert result["success"] is False
+        assert "error" in result
+        assert "Agent failed on iteration 2" in result["error"]
+        assert failing_agent.call_count == 2
+    
+    def test_default_max_iterations(self, mock_agent):
+        """Test default max_iterations value."""
+        loop_agent = ResumeBuilderLoopAgent(
+            name="DefaultLoop",
+            sub_agent=mock_agent,
+            description="Test default max iterations"
+        )
+        
+        assert loop_agent.max_iterations == 5  # Default value
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
