@@ -2,18 +2,25 @@
 """
 AI Resume Builder - Main Application
 
-An intelligent, multi-agent system that creates personalized, professional resumes 
-and cover letters tailored to specific job opportunities.
+An intelligent system that creates personalized, professional resumes 
+and cover letters for specific job opportunities.
 """
-
-import asyncio
 import os
 import sys
-from pathlib import Path
-from typing import Dict, Any, Optional
 import json
+import sqlite3
+import asyncio
+from pathlib import Path
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from dotenv import load_dotenv
+import google.generativeai as genai
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_LEFT, TA_CENTER
+import re
 
 # Load environment variables
 load_dotenv()
@@ -28,615 +35,400 @@ if 'GEMINI_API_KEY' in os.environ:
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-# Import ADK components
-from google.adk.runners import InMemoryRunner
-from google.genai import types
-
-# Import our custom agents
-from agents.core.simple_coordinator import SimpleResumeBuilderCoordinator
-from agents.core.cv_analyzer import CVAnalyzer
-from agents.core.job_parser import JobDescriptionParser
-from agents.core.resume_tailor import ResumeTailor
-from agents.core.cover_letter_gen import CoverLetterGenerator
-from agents.core.quality_reviewer import QualityReviewer
-from agents.data.database_manager import DatabaseManager
-from agents.workflows.sequential_agent import ResumeBuilderSequentialAgent
-from agents.workflows.parallel_agent import ResumeBuilderParallelAgent
-
 
 class AIResumeBuilder:
     """
     Main AI Resume Builder application class.
     
-    This class orchestrates the entire resume building process using a
-    multi-agent system with specialized agents for different tasks.
+    This class reads all CVs and job descriptions, then generates
+    one optimized resume and cover letter in both MD and PDF formats.
     """
     
     def __init__(self):
         """Initialize the AI Resume Builder."""
-        self.coordinator = None
-        self.runner = None
-        self._initialize_agents()
-        self._initialize_runner()
+        self.input_dir = Path("input")
+        self.cv_dir = self.input_dir / "cvs"
+        self.job_dir = self.input_dir / "job_descriptions"
+        self.output_dir = Path("output")
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Configure the Google Generative AI API
+        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
     
-    def _initialize_runner(self):
-        """Initialize the ADK Runner with our coordinator agent."""
-        self.runner = InMemoryRunner(
-            agent=self.coordinator,
-            app_name="AI Resume Builder"
-        )
+    def read_all_cvs(self) -> List[Dict[str, str]]:
+        """Read all CV files from the input directory."""
+        cvs = []
+        cv_files = list(self.cv_dir.glob("*.txt"))
+        
+        for cv_file in cv_files:
+            try:
+                with open(cv_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                cvs.append({
+                    "filename": cv_file.name,
+                    "content": content
+                })
+                print(f"📄 Loaded CV: {cv_file.name}")
+            except Exception as e:
+                print(f"❌ Error reading CV file {cv_file}: {e}")
+        
+        return cvs
     
-    def _initialize_agents(self) -> None:
-        """Initialize all the specialized agents and workflows."""
+    def read_all_job_descriptions(self) -> List[Dict[str, str]]:
+        """Read all job description files from the input directory."""
+        jobs = []
+        job_files = list(self.job_dir.glob("*.txt"))
         
-        # Create individual specialized agents
-        cv_analyzer = CVAnalyzer()
-        job_parser = JobDescriptionParser()
-        resume_tailor = ResumeTailor()
-        cover_letter_gen = CoverLetterGenerator()
-        quality_reviewer = QualityReviewer(quality_threshold=0.85)
-        database_manager = DatabaseManager()
+        for job_file in job_files:
+            try:
+                with open(job_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                jobs.append({
+                    "filename": job_file.name,
+                    "content": content
+                })
+                print(f"💼 Loaded job description: {job_file.name}")
+            except Exception as e:
+                print(f"❌ Error reading job file {job_file}: {e}")
         
-        # Create workflow agents
-        # Parallel analysis of CV and job description
-        analysis_workflow = ResumeBuilderParallelAgent(
-            name="AnalysisWorkflow",
-            sub_agents=[cv_analyzer, job_parser],
-            description="Parallel analysis of CV and job description"
-        )
-        
-        # Sequential content generation
-        generation_workflow = ResumeBuilderSequentialAgent(
-            name="GenerationWorkflow", 
-            sub_agents=[resume_tailor, cover_letter_gen],
-            description="Sequential generation of tailored resume and cover letter"
-        )
-        
-        # Quality assurance and storage
-        qa_workflow = ResumeBuilderSequentialAgent(
-            name="QAWorkflow",
-            sub_agents=[quality_reviewer, database_manager],
-            description="Quality assurance and database storage"
-        )
-        
-        # Main pipeline workflow
-        main_pipeline = ResumeBuilderSequentialAgent(
-            name="MainPipeline",
-            sub_agents=[analysis_workflow, generation_workflow, qa_workflow],
-            description="Main resume building pipeline"
-        )
-        
-        # Create the main coordinator (simplified version)
-        self.coordinator = SimpleResumeBuilderCoordinator(
-            description="Simple coordinator for the AI Resume Builder system"
-        )
+        return jobs
     
-    async def process_resume_request(
+    async def generate_resume_and_cover_letter(
         self, 
-        cv_content: str, 
-        job_description: str,
-        user_id: str = "anonymous",
-        user_name: str = "User"
+        cvs: List[Dict[str, str]], 
+        jobs: List[Dict[str, str]]
     ) -> Dict[str, Any]:
         """
-        Process a resume building request using ADK Runner.
+        Generate optimized resume and cover letter based on all CVs and job descriptions.
         
         Args:
-            cv_content: The CV/resume content text
-            job_description: The job description text
-            user_id: User identifier
-            user_name: User's name
+            cvs: List of CV data
+            jobs: List of job description data
             
         Returns:
-            Dictionary containing the processing results
+            Dictionary containing the generated content
         """
         try:
-            # Create user message with the input data
-            user_message = types.Content(
-                parts=[
-                    types.Part(
-                        text=f"""
-                        Please help me create a tailored resume and cover letter for the following job opportunity.
-                        
-                        **My CV/Resume:**
-                        {cv_content}
-                        
-                        **Job Description:**
-                        {job_description}
-                        
-                        **User Information:**
-                        - User ID: {user_id}
-                        - Name: {user_name}
-                        
-                        Please analyze my CV, understand the job requirements, create a tailored resume, 
-                        generate a cover letter, and provide quality feedback.
-                        """
-                    )
-                ]
-            )
+            # Combine all CV content
+            combined_cv_content = "\n\n".join([cv["content"] for cv in cvs])
             
-            # Log the start of processing
-            print(f"🚀 Starting resume building process for user: {user_name} ({user_id})")
-            print(f"📄 CV length: {len(cv_content)} characters")
-            print(f"💼 Job description length: {len(job_description)} characters")
-            print(f"🔍 Message preview: {user_message.parts[0].text[:300]}...")
-            print("-" * 60)
+            # Combine all job descriptions
+            combined_job_content = "\n\n".join([
+                f"=== {job['filename']} ===\n{job['content']}" 
+                for job in jobs
+            ])
             
-            # Create a session using the runner's session service
-            session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{user_id}"
-            await self.runner.session_service.create_session(
-                session_id=session_id,
-                user_id=user_id,
-                app_name="AI Resume Builder"
-            )
-            
-            # Run the coordinator through the ADK Runner
-            events = self.runner.run_async(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=user_message
-            )
-            
-            # Process the events and get the final result
-            final_response = ""
-            event_count = 0
-            async for event in events:
-                event_count += 1
-                print(f"🔍 Event {event_count}: {type(event).__name__}")
-                
-                if hasattr(event, 'is_final_response') and event.is_final_response():
-                    print(f"🎯 Final response event detected")
-                    if hasattr(event, 'content') and event.content and event.content.parts:
-                        final_response = event.content.parts[0].text
-                        print(f"📝 Final response length: {len(final_response)} characters")
-                        break
-                elif hasattr(event, 'content') and event.content and event.content.parts:
-                    # Collect all content parts
-                    final_response = event.content.parts[0].text
-                    print(f"📝 Content received: {len(final_response)} characters")
-                    
-            print(f"🔍 Total events processed: {event_count}")
-            print(f"📝 Final response preview: {final_response[:200]}..." if final_response else "❌ No final response received")
-            
-            # Process the result
-            summary = self._process_runner_result(final_response, user_id, user_name)
-            
-            print("-" * 60)
-            print("✅ Processing completed!")
-            print(f"📊 Generated {len(summary.get('generated_components', []))} components")
-            
-            return summary
-            
-        except Exception as e:
-            error_msg = f"Error processing resume request: {str(e)}"
-            print(f"❌ {error_msg}")
-            return {
-                "success": False,
-                "error": error_msg,
-                "user_id": user_id
-            }
-    
-    async def process_simple_direct(self, cv_content: str, job_description: str, user_id: str, user_name: str) -> Dict[str, Any]:
-        """
-        Process resume request using direct LLM invocation (bypassing ADK runner).
-        
-        Args:
-            cv_content: The CV/resume content
-            job_description: The job description
-            user_id: User identifier
-            user_name: User's name
-            
-        Returns:
-            Dictionary containing the processing results
-        """
-        try:
-            # Create a simple prompt
+            # Create a comprehensive prompt
             prompt = f"""
-            Please help me create a tailored resume and cover letter for the following job opportunity.
-            
-            **My CV/Resume:**
-            {cv_content}
-            
-            **Job Description:**
-            {job_description}
-            
-            **User Information:**
-            - User ID: {user_id}
-            - Name: {user_name}
-            
-            Please analyze my CV, understand the job requirements, create a tailored resume, 
-            generate a cover letter, and provide quality feedback.
-            
-            Please structure your response with clear sections:
-            
-            ## TAILORED RESUME:
-            [Provide the optimized resume content here]
-            
-            ## COVER LETTER:
-            [Provide the personalized cover letter here]
-            
-            ## QUALITY REVIEW:
-            [Provide feedback and recommendations]
+            You are a professional resume writer and career consultant. Based on the provided CV(s) and job description(s), create one optimized professional resume and one compelling cover letter.
+
+            **IMPORTANT GUIDELINES:**
+            - Do NOT use words like "tailor", "tailored", "customized", "personalized" or similar terms in the output
+            - Create a clean, professional resume that highlights the most relevant experience
+            - Focus on achievements, metrics, and impact
+            - Use action verbs and quantifiable results
+            - Make the content flow naturally without mentioning adaptation or customization
+
+            **CV CONTENT:**
+            {combined_cv_content}
+
+            **JOB OPPORTUNITIES:**
+            {combined_job_content}
+
+            Please provide your response in the following structured format:
+
+            ## PROFESSIONAL RESUME
+
+            [Provide a clean, professional resume that showcases the candidate's experience and skills most relevant to the job opportunities. Include all standard sections: contact info, professional summary, technical skills, professional experience with bullet points highlighting achievements, education, certifications, and projects. Make it ATS-friendly and well-formatted.]
+
+            ## COVER LETTER
+
+            [Provide a compelling cover letter that demonstrates enthusiasm for the opportunities and explains how the candidate's background makes them an ideal fit. Keep it concise, engaging, and professional. Address it generically to "Hiring Manager" since there are multiple potential positions.]
+
+            ## FORMATTING NOTES
+
+            [Provide brief notes about the resume structure and key highlights for optimal presentation]
             """
             
-            # Log the start of processing
-            print(f"🚀 Starting direct LLM processing for user: {user_name} ({user_id})")
-            print(f"📄 CV length: {len(cv_content)} characters")
-            print(f"💼 Job description length: {len(job_description)} characters")
-            print(f"🔍 Prompt length: {len(prompt)} characters")
-            print("-" * 60)
-            
-            # Try to call the LLM directly using the Google Generative AI API
-            import google.generativeai as genai
-            
-            # Configure the API
-            genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-            
-            # Create the model
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            print("🤖 Generating optimized resume and cover letter...")
+            print(f"📊 Processing {len(cvs)} CV(s) and {len(jobs)} job description(s)")
             
             # Generate response
-            print("🤖 Calling LLM directly...")
-            response = model.generate_content(prompt)
+            response = self.model.generate_content(prompt)
+            content = response.text
             
-            final_response = response.text
-            print(f"📝 LLM response length: {len(final_response)} characters")
-            print(f"📝 Response preview: {final_response[:300]}...")
+            print(f"✅ Generated content ({len(content)} characters)")
             
-            # Process the result
-            summary = self._process_runner_result(final_response, user_id, user_name)
+            # Extract sections
+            sections = self._extract_sections(content)
             
-            print("-" * 60)
-            print("✅ Direct processing completed!")
-            print(f"📊 Generated {len(summary.get('generated_components', []))} components")
-            
-            return summary
+            return {
+                "success": True,
+                "resume": sections.get("resume", ""),
+                "cover_letter": sections.get("cover_letter", ""),
+                "formatting_notes": sections.get("formatting_notes", ""),
+                "timestamp": datetime.now().isoformat(),
+                "cv_count": len(cvs),
+                "job_count": len(jobs)
+            }
             
         except Exception as e:
-            error_msg = f"Error in direct processing: {str(e)}"
+            error_msg = f"Error generating content: {str(e)}"
             print(f"❌ {error_msg}")
             return {
                 "success": False,
-                "error": error_msg,
-                "user_id": user_id
+                "error": error_msg
             }
     
-    def _process_runner_result(self, final_content: str, user_id: str, user_name: str) -> Dict[str, Any]:
-        """Process the result from the ADK Runner and extract components."""
-        
-        # Create summary
-        summary = {
-            "success": True,
-            "user_id": user_id,
-            "user_name": user_name,
-            "timestamp": datetime.now().isoformat(),
-            "final_content": final_content,
-            "generated_components": [],
-            "documents": {},
-            "processing_complete": True
-        }
-        
-        # Extract structured components from the final content
-        components = self._extract_components(final_content)
-        
-        if components["tailored_resume"]:
-            summary["generated_components"].append("tailored_resume")
-            summary["documents"]["tailored_resume"] = components["tailored_resume"]
-            
-        if components["cover_letter"]:
-            summary["generated_components"].append("cover_letter")
-            summary["documents"]["cover_letter"] = components["cover_letter"]
-            
-        if components["quality_review"]:
-            summary["generated_components"].append("quality_review")
-            summary["documents"]["quality_review"] = components["quality_review"]
-        
-        return summary
-    
-    def _extract_components(self, content: str) -> Dict[str, str]:
-        """Extract individual components from the LLM response."""
-        
-        components = {
-            "tailored_resume": "",
+    def _extract_sections(self, content: str) -> Dict[str, str]:
+        """Extract sections from the generated content."""
+        sections = {
+            "resume": "",
             "cover_letter": "",
-            "quality_review": ""
+            "formatting_notes": ""
         }
         
-        # Split content by section headers
-        sections = content.split("##")
+        # Split by section headers
+        current_section = None
+        current_content = []
         
-        for section in sections:
-            section = section.strip()
-            if section.startswith("TAILORED RESUME:"):
-                # Remove the header and get the content
-                components["tailored_resume"] = section.replace("TAILORED RESUME:", "").strip()
-            elif section.startswith("COVER LETTER:"):
-                components["cover_letter"] = section.replace("COVER LETTER:", "").strip()
-            elif section.startswith("QUALITY REVIEW:"):
-                components["quality_review"] = section.replace("QUALITY REVIEW:", "").strip()
+        lines = content.split('\n')
         
-        return components
-    
-    def save_results(self, results: Dict[str, Any], output_dir: str = "output") -> Dict[str, str]:
-        """
-        Save the results to markdown files and database.
-        
-        Args:
-            results: The processing results
-            output_dir: Directory to save results (default: "output")
+        for line in lines:
+            line_stripped = line.strip()
             
-        Returns:
-            Dictionary with file paths
-        """
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+            if line_stripped.startswith("## PROFESSIONAL RESUME"):
+                if current_section:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = "resume"
+                current_content = []
+            elif line_stripped.startswith("## COVER LETTER"):
+                if current_section:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = "cover_letter"
+                current_content = []
+            elif line_stripped.startswith("## FORMATTING NOTES"):
+                if current_section:
+                    sections[current_section] = '\n'.join(current_content).strip()
+                current_section = "formatting_notes"
+                current_content = []
+            else:
+                if current_section:
+                    current_content.append(line)
         
-        # Create a timestamp for unique file naming
+        # Add the last section
+        if current_section:
+            sections[current_section] = '\n'.join(current_content).strip()
+        
+        return sections
+    
+    def save_markdown_files(self, data: Dict[str, Any]) -> Dict[str, str]:
+        """Save resume and cover letter as markdown files."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        user_id = results.get("user_id", "user")
         file_paths = {}
         
         try:
-            # Save full results as JSON for reference
-            results_file = output_path / f"{timestamp}_{user_id}_results.json"
-            with open(results_file, 'w') as f:
-                json.dump(results, f, indent=2, default=str)
-            file_paths["results_json"] = str(results_file)
+            if data.get("resume"):
+                resume_file = self.output_dir / f"{timestamp}_resume.md"
+                with open(resume_file, 'w', encoding='utf-8') as f:
+                    f.write(data["resume"])
+                file_paths["resume_md"] = str(resume_file)
+                print(f"💾 Saved resume: {resume_file}")
             
-            # Save individual documents as markdown files
-            documents = results.get("documents", {})
-            
-            if "tailored_resume" in documents:
-                resume_file = output_path / f"{timestamp}_{user_id}_tailored_resume.md"
-                with open(resume_file, 'w') as f:
-                    f.write("# Tailored Resume\n\n")
-                    f.write(documents["tailored_resume"])
-                file_paths["tailored_resume"] = str(resume_file)
-            
-            if "cover_letter" in documents:
-                cover_letter_file = output_path / f"{timestamp}_{user_id}_cover_letter.md"
-                with open(cover_letter_file, 'w') as f:
-                    f.write("# Cover Letter\n\n")
-                    f.write(documents["cover_letter"])
-                file_paths["cover_letter"] = str(cover_letter_file)
-            
-            if "quality_review" in documents:
-                quality_file = output_path / f"{timestamp}_{user_id}_quality_review.md"
-                with open(quality_file, 'w') as f:
-                    f.write("# Quality Review\n\n")
-                    f.write(documents["quality_review"])
-                file_paths["quality_review"] = str(quality_file)
-            
-            # Create a combined markdown file with all components
-            if documents:
-                combined_file = output_path / f"{timestamp}_{user_id}_complete_package.md"
-                with open(combined_file, 'w') as f:
-                    f.write("# Resume Package\n\n")
-                    f.write(f"Generated on: {results.get('timestamp', 'N/A')}\n")
-                    f.write(f"User: {results.get('user_name', 'N/A')}\n\n")
-                    
-                    if "tailored_resume" in documents:
-                        f.write("## Tailored Resume\n\n")
-                        f.write(documents["tailored_resume"])
-                        f.write("\n\n---\n\n")
-                    
-                    if "cover_letter" in documents:
-                        f.write("## Cover Letter\n\n")
-                        f.write(documents["cover_letter"])
-                        f.write("\n\n---\n\n")
-                    
-                    if "quality_review" in documents:
-                        f.write("## Quality Review\n\n")
-                        f.write(documents["quality_review"])
-                        f.write("\n\n")
-                
-                file_paths["complete_package"] = str(combined_file)
-            
-            # Store in database
-            db_result = self._store_in_database(results, timestamp)
-            if db_result.get("success"):
-                file_paths["database_storage"] = f"Session ID: {db_result.get('session_id')}"
-                print(f"💾 Data stored in database with session ID: {db_result.get('session_id')}")
-            else:
-                print(f"⚠️  Database storage failed: {db_result.get('error', 'Unknown error')}")
-            
-            print(f"💾 Results saved to: {output_dir}")
-            for doc_type, path in file_paths.items():
-                print(f"   📄 {doc_type}: {path}")
+            if data.get("cover_letter"):
+                cover_letter_file = self.output_dir / f"{timestamp}_cover_letter.md"
+                with open(cover_letter_file, 'w', encoding='utf-8') as f:
+                    f.write(data["cover_letter"])
+                file_paths["cover_letter_md"] = str(cover_letter_file)
+                print(f"💾 Saved cover letter: {cover_letter_file}")
             
         except Exception as e:
-            print(f"❌ Error saving results: {e}")
+            print(f"❌ Error saving markdown files: {e}")
         
         return file_paths
     
-    def _store_in_database(self, results: Dict[str, Any], timestamp: str) -> Dict[str, Any]:
-        """
-        Store results in SQLite database.
+    def _clean_text_for_pdf(self, text: str) -> str:
+        """Clean text for PDF generation by removing markdown formatting."""
+        # Remove markdown headers
+        text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)
         
-        Args:
-            results: The processing results
-            timestamp: Timestamp for session ID
-            
-        Returns:
-            Dictionary with storage results
-        """
+        # Remove markdown bold/italic
+        text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+        text = re.sub(r'\*(.*?)\*', r'\1', text)
+        
+        # Remove markdown links but keep the text
+        text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', text)
+        
+        # Clean up excessive whitespace
+        text = re.sub(r'\n\s*\n\s*\n', '\n\n', text)
+        
+        return text.strip()
+    
+    def save_pdf_files(self, data: Dict[str, Any]) -> Dict[str, str]:
+        """Save resume and cover letter as PDF files."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_paths = {}
+        
         try:
-            # Initialize database manager
-            db_manager = DatabaseManager()
-            db_manager._setup_resources()
+            # Create styles
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                spaceAfter=12,
+                alignment=TA_CENTER
+            )
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=12,
+                spaceAfter=6,
+                spaceBefore=12
+            )
+            normal_style = styles['Normal']
             
-            import sqlite3
-            import hashlib
-            
-            user_id = results.get("user_id", "user")
-            user_name = results.get("user_name", "User")
-            session_id = f"session_{timestamp}_{user_id}"
-            
-            # Get original content from results (if available)
-            cv_content = results.get("original_cv_content", "")
-            job_content = results.get("original_job_content", "")
-            
-            with sqlite3.connect(db_manager._db_path) as conn:
-                cursor = conn.cursor()
+            # Save resume as PDF
+            if data.get("resume"):
+                resume_pdf = self.output_dir / f"{timestamp}_resume.pdf"
+                doc = SimpleDocTemplate(str(resume_pdf), pagesize=letter,
+                                      rightMargin=72, leftMargin=72,
+                                      topMargin=72, bottomMargin=18)
                 
-                # Store user if not exists
-                cursor.execute("""
-                    INSERT OR IGNORE INTO users (user_id, name) 
-                    VALUES (?, ?)
-                """, (user_id, user_name))
+                story = []
+                resume_text = self._clean_text_for_pdf(data["resume"])
                 
-                # Store CV if available
-                cv_id = None
-                if cv_content:
-                    cv_hash = hashlib.md5(cv_content.encode()).hexdigest()
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO original_cvs 
-                        (user_id, cv_content, cv_hash, file_name) 
-                        VALUES (?, ?, ?, ?)
-                    """, (user_id, cv_content, cv_hash, "sample_cv.txt"))
+                # Split into paragraphs and process
+                paragraphs = resume_text.split('\n\n')
+                
+                for para in paragraphs:
+                    para = para.strip()
+                    if not para:
+                        continue
                     
-                    cursor.execute("SELECT id FROM original_cvs WHERE cv_hash = ?", (cv_hash,))
-                    result = cursor.fetchone()
-                    if result:
-                        cv_id = result[0]
-                
-                # Store job description if available
-                job_id = None
-                if job_content:
-                    job_hash = hashlib.md5(job_content.encode()).hexdigest()
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO job_descriptions 
-                        (job_title, company_name, job_content, job_hash) 
-                        VALUES (?, ?, ?, ?)
-                    """, ("Sample Job", "Sample Company", job_content, job_hash))
+                    # Check if it's a section header (all caps or starts with certain patterns)
+                    if (para.isupper() and len(para) < 50) or \
+                       any(para.startswith(prefix) for prefix in ['PROFESSIONAL SUMMARY', 'TECHNICAL SKILLS', 'PROFESSIONAL EXPERIENCE', 'EDUCATION', 'CERTIFICATIONS', 'PROJECTS', 'LANGUAGES']):
+                        story.append(Paragraph(para, heading_style))
+                    else:
+                        # Handle bullet points
+                        lines = para.split('\n')
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith('•') or line.startswith('-'):
+                                story.append(Paragraph(line, normal_style))
+                            elif line:
+                                story.append(Paragraph(line, normal_style))
                     
-                    cursor.execute("SELECT id FROM job_descriptions WHERE job_hash = ?", (job_hash,))
-                    result = cursor.fetchone()
-                    if result:
-                        job_id = result[0]
+                    story.append(Spacer(1, 6))
                 
-                # Create processing session
-                if cv_id and job_id:
-                    cursor.execute("""
-                        INSERT INTO processing_sessions 
-                        (session_id, user_id, cv_id, job_id, status, completed_at) 
-                        VALUES (?, ?, ?, ?, 'completed', CURRENT_TIMESTAMP)
-                    """, (session_id, user_id, cv_id, job_id))
-                else:
-                    # Create minimal session without CV/Job references
-                    cursor.execute("""
-                        INSERT INTO processing_sessions 
-                        (session_id, user_id, cv_id, job_id, status, completed_at) 
-                        VALUES (?, ?, 1, 1, 'completed', CURRENT_TIMESTAMP)
-                    """, (session_id, user_id))
+                doc.build(story)
+                file_paths["resume_pdf"] = str(resume_pdf)
+                print(f"📄 Saved resume PDF: {resume_pdf}")
+            
+            # Save cover letter as PDF
+            if data.get("cover_letter"):
+                cover_letter_pdf = self.output_dir / f"{timestamp}_cover_letter.pdf"
+                doc = SimpleDocTemplate(str(cover_letter_pdf), pagesize=letter,
+                                      rightMargin=72, leftMargin=72,
+                                      topMargin=72, bottomMargin=18)
                 
-                # Store documents
-                documents = results.get("documents", {})
-                stored_docs = []
+                story = []
+                cover_letter_text = self._clean_text_for_pdf(data["cover_letter"])
                 
-                if "tailored_resume" in documents:
-                    cursor.execute("""
-                        INSERT INTO tailored_resumes 
-                        (session_id, resume_content, quality_score) 
-                        VALUES (?, ?, ?)
-                    """, (session_id, documents["tailored_resume"], 0.8))
-                    stored_docs.append("tailored_resume")
+                # Add title
+                story.append(Paragraph("Cover Letter", title_style))
+                story.append(Spacer(1, 12))
                 
-                if "cover_letter" in documents:
-                    cursor.execute("""
-                        INSERT INTO cover_letters 
-                        (session_id, letter_content, quality_score) 
-                        VALUES (?, ?, ?)
-                    """, (session_id, documents["cover_letter"], 0.8))
-                    stored_docs.append("cover_letter")
+                # Split into paragraphs
+                paragraphs = cover_letter_text.split('\n\n')
                 
-                conn.commit()
+                for para in paragraphs:
+                    para = para.strip()
+                    if para:
+                        story.append(Paragraph(para, normal_style))
+                        story.append(Spacer(1, 12))
                 
-                return {
-                    "success": True,
-                    "session_id": session_id,
-                    "stored_documents": stored_docs,
-                    "database_path": str(db_manager._db_path)
-                }
-                
+                doc.build(story)
+                file_paths["cover_letter_pdf"] = str(cover_letter_pdf)
+                print(f"📄 Saved cover letter PDF: {cover_letter_pdf}")
+            
         except Exception as e:
+            print(f"❌ Error saving PDF files: {e}")
+        
+        return file_paths
+    
+    async def process_all_inputs(self) -> Dict[str, Any]:
+        """
+        Main processing function that reads all inputs and generates output.
+        
+        Returns:
+            Dictionary containing processing results and file paths
+        """
+        print("🚀 Starting AI Resume Builder")
+        print("=" * 60)
+        
+        # Read all CVs
+        print("📂 Reading CV files...")
+        cvs = self.read_all_cvs()
+        if not cvs:
             return {
                 "success": False,
-                "error": str(e)
+                "error": "No CV files found in input/cvs directory"
             }
         
+        # Read all job descriptions
+        print("📂 Reading job description files...")
+        jobs = self.read_all_job_descriptions()
+        if not jobs:
+            return {
+                "success": False,
+                "error": "No job description files found in input/job_descriptions directory"
+            }
+        
+        print(f"📊 Found {len(cvs)} CV(s) and {len(jobs)} job description(s)")
+        print("-" * 60)
+        
+        # Generate content
+        result = await self.generate_resume_and_cover_letter(cvs, jobs)
+        
+        if not result.get("success"):
+            return result
+        
+        # Save files
+        print("\n💾 Saving output files...")
+        md_paths = self.save_markdown_files(result)
+        pdf_paths = self.save_pdf_files(result)
+        
+        # Combine file paths
+        all_paths = {**md_paths, **pdf_paths}
+        result["file_paths"] = all_paths
+        
+        print("\n" + "=" * 60)
+        print("🎉 Processing completed successfully!")
+        print(f"📊 Generated files:")
+        for file_type, path in all_paths.items():
+            print(f"   {file_type}: {Path(path).name}")
+        
+        return result
+
 
 async def main():
     """Main function to run the AI Resume Builder."""
-    
-    print("🤖 AI Resume Builder")
-    print("=" * 60)
-    
-    # Initialize the application
     app = AIResumeBuilder()
+    result = await app.process_all_inputs()
     
-    # Check if sample files exist
-    cv_file = Path("input/cvs/sample_cv.txt")
-    job_file = Path("input/job_descriptions/sample_job.txt")
-    
-    if not cv_file.exists():
-        print(f"❌ Sample CV file not found: {cv_file}")
-        print("Please add a CV file to the input/cvs/ directory")
-        return
-    
-    if not job_file.exists():
-        print(f"❌ Sample job description file not found: {job_file}")
-        print("Please add a job description file to the input/job_descriptions/ directory")
-        return
-    
-    # Read input files
-    try:
-        with open(cv_file, 'r') as f:
-            cv_content = f.read()
+    if result.get("success"):
+        print(f"\n✅ Success! Generated {len(result.get('file_paths', {}))} files")
         
-        with open(job_file, 'r') as f:
-            job_description = f.read()
-        
-        print(f"📂 Loaded CV from: {cv_file}")
-        print(f"📂 Loaded job description from: {job_file}")
-        
-    except Exception as e:
-        print(f"❌ Error reading input files: {e}")
-        return
-    
-    # Process the resume request using direct LLM call
-    results = await app.process_simple_direct(
-        cv_content=cv_content,
-        job_description=job_description,
-        user_id="demo_user",
-        user_name="Demo User"
-    )
-    
-    # Add original content to results for database storage
-    if results.get("success"):
-        results["original_cv_content"] = cv_content
-        results["original_job_content"] = job_description
-    
-    # Save results
-    if results.get("success"):
-        file_paths = app.save_results(results)
-        
-        print("\n" + "=" * 60)
-        print("🎉 Resume building completed successfully!")
-        print("\n📊 Summary:")
-        print(f"   Generated Components: {len(results.get('generated_components', []))}")
-        print(f"   Quality Score: {results.get('quality_score', 'N/A')}")
-        print(f"   ATS Score: {results.get('ats_score', 'N/A')}")
-        
-        if "documents" in results:
-            docs = results["documents"]
-            if "tailored_resume" in docs:
-                print(f"   📄 Tailored Resume: {len(docs['tailored_resume'])} characters")
-            if "cover_letter" in docs:
-                print(f"   📄 Cover Letter: {len(docs['cover_letter'])} characters")
-    
+        # Print summary
+        if result.get("resume"):
+            print(f"📄 Resume length: {len(result['resume'])} characters")
+        if result.get("cover_letter"):
+            print(f"📝 Cover letter length: {len(result['cover_letter'])} characters")
     else:
-        print(f"\n❌ Resume building failed: {results.get('error', 'Unknown error')}")
+        print(f"\n❌ Failed: {result.get('error', 'Unknown error')}")
 
 
 if __name__ == "__main__":
